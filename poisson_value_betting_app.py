@@ -7,7 +7,6 @@ from scipy.stats import poisson
 st.set_page_config(page_title="Value Betting Dashboard", layout="centered")
 st.title("Value Betting Dashboard")
 
-# League dropdown setup
 leagues = {
     "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
@@ -25,7 +24,6 @@ odds_key = leagues[selected]["odds_key"]
 
 min_ev = st.sidebar.slider("Minimum EV Threshold", -1.0, 1.0, 0.05, 0.01)
 conf_filter = st.sidebar.selectbox("Confidence Level", ["All", "High", "Medium", "Low"])
-sort_by = st.sidebar.selectbox("Sort Matches By", ["Expected Value", "Kickoff Time"])
 
 @st.cache_data(ttl=86400)
 def load_results(code: str):
@@ -63,28 +61,28 @@ def load_odds(odds_key: str):
             continue
         home = match["home_team"]
         away = match["away_team"]
-        outcomes = match["bookmakers"][0]["markets"][0]["outcomes"]
-        home_odds = draw_odds = away_odds = None
-        for o in outcomes:
+        odds = match["bookmakers"][0]["markets"][0]["outcomes"]
+        home_odds = away_odds = draw_odds = None
+        for o in odds:
             if o["name"] == home:
                 home_odds = o["price"]
             elif o["name"] == away:
                 away_odds = o["price"]
-            elif o["name"].lower() == "draw":
+            elif o["name"] == "Draw":
                 draw_odds = o["price"]
-        if home_odds and away_odds:
+        if home_odds and away_odds and draw_odds:
             matches.append({
                 "Home Team": home,
                 "Away Team": away,
                 "Home Odds": home_odds,
-                "Draw Odds": draw_odds if draw_odds else 3.2 + np.random.rand(),
+                "Draw Odds": draw_odds,
                 "Away Odds": away_odds,
                 "Kickoff": match.get("commence_time", "N/A")
             })
     return pd.DataFrame(matches)
 
 results = load_results(league_code)
-odds_df = load_odds(odds_key)
+odds = load_odds(odds_key)
 
 avg_home_xg = results["xG Home"].mean()
 avg_away_xg = results["xG Away"].mean()
@@ -122,11 +120,10 @@ def predict_poisson(ht, at):
     return round(np.sum(np.tril(matrix, -1)), 3), round(np.sum(np.diag(matrix)), 3), round(np.sum(np.triu(matrix, 1)), 3), conf
 
 st.write(f"### Upcoming Matches â {selected}")
-if odds_df.empty:
+if odds.empty:
     st.warning("No odds available.")
 else:
-    match_rows = []
-    for _, row in odds_df.iterrows():
+    for _, row in odds.iterrows():
         h, d, a, conf = predict_poisson(row["Home Team"], row["Away Team"])
         implied_home = round(1 / row["Home Odds"], 3)
         implied_draw = round(1 / row["Draw Odds"], 3)
@@ -138,21 +135,11 @@ else:
         best_bet = ["Home", "Draw", "Away"][np.argmax([ev_h, ev_d, ev_a])] if best > min_ev else "No Value"
         if conf_filter != "All" and conf != conf_filter:
             continue
-        match_rows.append({
-            "Match": f"{row['Home Team']} vs {row['Away Team']}",
-            "Home Prob": h, "Draw Prob": d, "Away Prob": a,
-            "Home Impl": implied_home, "Draw Impl": implied_draw, "Away Impl": implied_away,
-            "EV Home": ev_h, "EV Draw": ev_d, "EV Away": ev_a,
-            "Confidence": conf,
-            "Best Bet": best_bet
-        })
-
-    for m in match_rows:
-        st.subheader(m["Match"])
+        st.subheader(f"{row['Home Team']} vs {row['Away Team']}")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Home Win", f"{m['Home Prob']:.2f}", f"Impl: {m['Home Impl']:.2f}")
-        col2.metric("Draw", f"{m['Draw Prob']:.2f}", f"Impl: {m['Draw Impl']:.2f}")
-        col3.metric("Away Win", f"{m['Away Prob']:.2f}", f"Impl: {m['Away Impl']:.2f}")
-        st.markdown(f"**EV** â Home: `{m['EV Home']}`, Draw: `{m['EV Draw']}`, Away: `{m['EV Away']}`")
-        st.markdown(f"**Best Bet:** `{m['Best Bet']}` | **Confidence:** {m['Confidence']}`")
+        col1.metric("Home Win", f"{h:.2f}", f"Impl: {implied_home:.2f}")
+        col2.metric("Draw", f"{d:.2f}", f"Impl: {implied_draw:.2f}")
+        col3.metric("Away Win", f"{a:.2f}", f"Impl: {implied_away:.2f}")
+        st.markdown(f"**EV** â Home: `{ev_h}`, Draw: `{ev_d}`, Away: `{ev_a}`")
+        st.markdown(f"**Best Bet:** `{best_bet}` | **Confidence:** {conf}`")
         st.markdown("---")
