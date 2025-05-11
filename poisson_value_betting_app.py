@@ -5,7 +5,7 @@ import requests
 from scipy.stats import poisson
 
 st.set_page_config(page_title="Value Betting Dashboard", layout="centered")
-st.title("Value Betting Dashboard — Fixed Odds Handling")
+st.title("Value Betting Dashboard — Best Odds Fixed")
 
 leagues = {
     "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
@@ -23,7 +23,7 @@ league_code = leagues[selected]["code"]
 odds_key = leagues[selected]["odds_key"]
 
 @st.cache_data(ttl=600)
-def load_odds(odds_key: str):
+def load_odds_best(odds_key: str):
     url = f"https://api.the-odds-api.com/v4/sports/{odds_key}/odds"
     params = {
         "apiKey": ODDS_API_KEY,
@@ -32,43 +32,40 @@ def load_odds(odds_key: str):
         "oddsFormat": "decimal"
     }
     r = requests.get(url, params=params)
-    st.write("ODDS API Status Code:", r.status_code)
-    try:
-        data = r.json()
-        st.json(data)
-    except:
-        st.write("Invalid or empty response.")
+    if r.status_code != 200:
+        st.error("Failed to fetch odds.")
         return pd.DataFrame()
+    data = r.json()
     matches = []
     for match in data:
-        if not match.get("bookmakers") or "home_team" not in match or "away_team" not in match:
-            continue
-        home = match["home_team"]
-        away = match["away_team"]
-        odds = match["bookmakers"][0]["markets"][0]["outcomes"]
-        home_odds = away_odds = None
-        draw_odds = 3.2 + np.random.rand()  # default
-        for o in odds:
-            if o["name"] == home:
-                home_odds = o["price"]
-            elif o["name"] == away:
-                away_odds = o["price"]
-            elif o["name"].lower() == "draw":
-                draw_odds = o["price"]
-        if home_odds and away_odds:
+        home = match.get("home_team")
+        away = match.get("away_team")
+        best_home, best_draw, best_away = 0, 0, 0
+        for book in match.get("bookmakers", []):
+            for market in book.get("markets", []):
+                if market.get("key") != "h2h":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name = outcome["name"].strip().lower()
+                    if name == home.strip().lower():
+                        best_home = max(best_home, outcome["price"])
+                    elif name == away.strip().lower():
+                        best_away = max(best_away, outcome["price"])
+                    elif name in ["draw", "the draw"]:
+                        best_draw = max(best_draw, outcome["price"])
+        if best_home and best_draw and best_away:
             matches.append({
                 "Home Team": home,
                 "Away Team": away,
-                "Home Odds": home_odds,
-                "Draw Odds": draw_odds,
-                "Away Odds": away_odds,
+                "Home Odds": best_home,
+                "Draw Odds": best_draw,
+                "Away Odds": best_away,
                 "Kickoff": match.get("commence_time", "N/A")
             })
     return pd.DataFrame(matches)
 
-# Just show odds table for demo
-odds = load_odds(odds_key)
-if odds.empty:
-    st.warning("No odds available.")
+odds_df = load_odds_best(odds_key)
+if odds_df.empty:
+    st.warning("No upcoming odds available.")
 else:
-    st.dataframe(odds)
+    st.dataframe(odds_df)
