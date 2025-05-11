@@ -18,7 +18,6 @@ leagues = {
     "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
     "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
 }
-    "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
     "Serie A": {"code": "SA", "odds_key": "soccer_italy_serie_a"},
     "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
     "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
