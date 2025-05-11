@@ -83,8 +83,8 @@ def load_odds(odds_key):
 results = load_results(league_code)
 odds = load_odds(odds_key)
 
-avg_home_xg = results["xG Home"].mean()
-avg_away_xg = results["xG Away"].mean()
+avg_home_xg = results["xG Home"].mean() if 'xG Home' in results.columns else 1.5
+avg_away_xg = results["xG Away"].mean() if 'xG Away' in results.columns else 1.3
 
 teams = pd.unique(results[["Home Team", "Away Team"]].values.ravel())
 stats = []
