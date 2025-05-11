@@ -3,10 +3,6 @@ import pandas as pd
 import numpy as np
 import requests
 from scipy.stats import poisson
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 
 st.set_page_config(page_title="Premier League Value Bets", layout="centered")
 st.title("Value Betting with Real Odds (Poisson Model)")
@@ -14,6 +10,7 @@ st.title("Value Betting with Real Odds (Poisson Model)")
 API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
 
+# Team name normalization
 team_name_map = {
     "Manchester City": "Man City", "Manchester United": "Man United",
     "Tottenham Hotspur": "Tottenham", "Brighton & Hove Albion": "Brighton",
@@ -26,6 +23,7 @@ team_name_map = {
     "Chelsea": "Chelsea", "Liverpool": "Liverpool", "Arsenal": "Arsenal"
 }
 
+# Fetch real odds
 def fetch_odds():
     params = {
         "apiKey": API_KEY,
@@ -34,8 +32,6 @@ def fetch_odds():
         "oddsFormat": "decimal"
     }
     response = requests.get(ODDS_URL, params=params)
-    logging.info(f"API response status: {response.status_code}")
-    logging.info(f"API response content: {response.text[:500]}")
     if response.status_code != 200:
         st.error(f"Failed to fetch odds data. Status code: {response.status_code}")
         return pd.DataFrame()
@@ -60,14 +56,21 @@ def fetch_odds():
     return pd.DataFrame(matches)
 
 matches = fetch_odds()
-st.write("Fetched matches preview:", matches.head())
 
-# Minimal historical data for Poisson model
+# Full Premier League team training set (mocked)
 historical = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham"],
-    "Away Team": ["Arsenal", "Chelsea", "Liverpool", "Man City", "Brighton"],
-    "Home Goals": [2, 2, 1, 1, 2],
-    "Away Goals": [1, 1, 2, 2, 1]
+    "Home Team": [
+        "Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham", "Man United", "Newcastle", "Brighton",
+        "Brentford", "Fulham", "Crystal Palace", "Wolves", "Aston Villa", "West Ham", "Everton", "Burnley",
+        "Luton", "Nottm Forest", "Sheffield Utd", "Bournemouth"
+    ],
+    "Away Team": [
+        "Arsenal", "Chelsea", "Liverpool", "Man City", "Brighton", "Tottenham", "Wolves", "Fulham",
+        "West Ham", "Brentford", "Leeds", "Everton", "Crystal Palace", "Newcastle", "Southampton", "Bournemouth",
+        "Aston Villa", "Leicester", "Luton", "Sheffield Utd"
+    ],
+    "Home Goals": [2, 2, 1, 1, 2, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 2, 1, 1],
+    "Away Goals": [1, 1, 2, 2, 1, 1, 0, 2, 1, 2, 2, 1, 1, 0, 1, 1, 2, 0, 2, 1]
 })
 
 avg_home_goals = historical["Home Goals"].mean()
@@ -110,8 +113,8 @@ def predict_poisson(home_team, away_team):
     away_win = np.sum(np.triu(matrix, 1))
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
-# Display results
-st.write("### Real-Time Value Bets")
+# Display
+st.write("### Real-Time Premier League Value Bets")
 if matches.empty:
     st.warning("No matches or odds available.")
 else:
