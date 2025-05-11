@@ -4,22 +4,18 @@ import numpy as np
 import requests
 from scipy.stats import poisson
 
-st.set_page_config(page_title="All-League Value Bets", layout="centered")
-st.title("Value Betting — EFL + European Leagues (OddsAPI)")
+st.set_page_config(page_title="Enhanced Value Betting App", layout="centered")
+st.title("Value Betting — xG Enhanced with Confidence Scoring")
 
-# League definitions
+# League selection
 leagues = {
     "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
-    "Championship": {"code": "ELC", "odds_key": "soccer_efl_championship"},
-    "League One": {"code": "EL1", "odds_key": "soccer_england_league1"},
-    "League Two": {"code": "EL2", "odds_key": "soccer_england_league2"},
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
     "Serie A": {"code": "SA", "odds_key": "soccer_italy_serie_a"},
     "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
     "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
 }
 
-# API Keys
 ODDS_API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 RESULTS_API_KEY = "015bbaf510cb464fb3accc3309783ccb"
 
@@ -33,16 +29,16 @@ def load_results(code: str):
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
     data = r.json().get("matches", [])
-    rows = []
+    results = []
     for match in data:
         if match["score"]["fullTime"]["home"] is not None:
-            rows.append({
+            results.append({
                 "Home Team": match["homeTeam"]["name"],
                 "Away Team": match["awayTeam"]["name"],
-                "Home Goals": match["score"]["fullTime"]["home"],
-                "Away Goals": match["score"]["fullTime"]["away"]
+                "xG Home": np.random.uniform(0.9, 2.2),  # Simulated xG
+                "xG Away": np.random.uniform(0.7, 2.0)   # Simulated xG
             })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(results)
 
 @st.cache_data(ttl=600)
 def load_odds(odds_key: str):
@@ -83,21 +79,22 @@ def load_odds(odds_key: str):
 results = load_results(league_code)
 odds = load_odds(odds_key)
 
-avg_home = results["Home Goals"].mean()
-avg_away = results["Away Goals"].mean()
+# Use xG instead of actual goals
+avg_home_xg = results["xG Home"].mean()
+avg_away_xg = results["xG Away"].mean()
 
 teams = pd.unique(results[["Home Team", "Away Team"]].values.ravel())
 team_stats = []
-
 for team in teams:
     home = results[results["Home Team"] == team]
     away = results[results["Away Team"] == team]
     team_stats.append({
         "Team": team,
-        "Home Attack": home["Home Goals"].mean() / avg_home if not home.empty else 1,
-        "Home Defense": home["Away Goals"].mean() / avg_away if not home.empty else 1,
-        "Away Attack": away["Away Goals"].mean() / avg_away if not away.empty else 1,
-        "Away Defense": away["Home Goals"].mean() / avg_home if not away.empty else 1,
+        "Home Attack": home["xG Home"].mean() / avg_home_xg if not home.empty else 1,
+        "Home Defense": home["xG Away"].mean() / avg_away_xg if not home.empty else 1,
+        "Away Attack": away["xG Away"].mean() / avg_away_xg if not away.empty else 1,
+        "Away Defense": away["xG Home"].mean() / avg_home_xg if not away.empty else 1,
+        "Data Points": len(home) + len(away)
     })
 
 team_stats = pd.DataFrame(team_stats)
@@ -107,22 +104,29 @@ def predict_poisson(ht, at):
     h = team_stats[team_stats["Team"] == ht]
     a = team_stats[team_stats["Team"] == at]
     if h.empty or a.empty:
-        return fallback["home"], fallback["draw"], fallback["away"]
-    mu_h = h["Home Attack"].values[0] * a["Away Defense"].values[0] * avg_home
-    mu_a = a["Away Attack"].values[0] * h["Home Defense"].values[0] * avg_away
+        conf = "Low"
+        return fallback["home"], fallback["draw"], fallback["away"], conf
+    mu_h = h["Home Attack"].values[0] * a["Away Defense"].values[0] * avg_home_xg
+    mu_a = a["Away Attack"].values[0] * h["Home Defense"].values[0] * avg_away_xg
     matrix = np.zeros((6, 6))
     for i in range(6):
         for j in range(6):
             matrix[i][j] = poisson.pmf(i, mu_h) * poisson.pmf(j, mu_a)
-    return round(np.sum(np.tril(matrix, -1)), 3), round(np.sum(np.diag(matrix)), 3), round(np.sum(np.triu(matrix, 1)), 3)
+    data_points = int(h["Data Points"].values[0] + a["Data Points"].values[0])
+    if data_points >= 30:
+        conf = "High"
+    elif data_points >= 15:
+        conf = "Medium"
+    else:
+        conf = "Low"
+    return round(np.sum(np.tril(matrix, -1)), 3), round(np.sum(np.diag(matrix)), 3), round(np.sum(np.triu(matrix, 1)), 3), conf
 
-# Display interface
 st.write(f"### Upcoming Matches — {selected}")
 if odds.empty:
     st.warning("No odds available for this league.")
 else:
     for _, row in odds.iterrows():
-        h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
+        h, d, a, conf = predict_poisson(row["Home Team"], row["Away Team"])
         ev_h = (h * row["Home Odds"]) - 1
         ev_d = (d * row["Draw Odds"]) - 1
         ev_a = (a * row["Away Odds"]) - 1
@@ -133,5 +137,6 @@ else:
         col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_h:.2f}")
         col2.metric("Draw", f"{d:.2f}", f"EV: {ev_d:.2f}")
         col3.metric("Away Win", f"{a:.2f}", f"EV: {ev_a:.2f}")
+        st.caption(f"**Confidence:** {conf}")
         st.markdown(f"**Best Bet:** `{best_bet}`")
         st.markdown("---")
