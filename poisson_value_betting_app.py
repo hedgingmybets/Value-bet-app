@@ -6,28 +6,27 @@ from scipy.stats import poisson
 st.set_page_config(page_title="Poisson Value Betting", layout="centered")
 st.title("Football Value Betting (Poisson Model)")
 
-# Mock upcoming matches
+# Expanded list of sample upcoming matches
 matches = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool"],
-    "Away Team": ["Arsenal", "Man United"],
-    "Home Odds": [1.80, 2.10],
-    "Draw Odds": [3.70, 3.50],
-    "Away Odds": [4.20, 3.40]
+    "League": ["Premier League"] * 3 + ["La Liga"] * 2,
+    "Home Team": ["Man City", "Liverpool", "Arsenal", "Real Madrid", "Barcelona"],
+    "Away Team": ["Arsenal", "Man United", "Chelsea", "Valencia", "Atletico Madrid"],
+    "Home Odds": [1.80, 2.10, 2.00, 1.90, 2.20],
+    "Draw Odds": [3.70, 3.50, 3.60, 3.30, 3.40],
+    "Away Odds": [4.20, 3.40, 3.90, 4.10, 3.10]
 })
 
-# Minimal mock training data for demo
+# Simple historical dataset
 historical = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool", "Arsenal"],
-    "Away Team": ["Chelsea", "Arsenal", "Liverpool"],
-    "Home Goals": [2, 2, 1],
-    "Away Goals": [1, 1, 2]
+    "Home Team": ["Man City", "Liverpool", "Arsenal", "Real Madrid", "Barcelona"],
+    "Away Team": ["Chelsea", "Arsenal", "Liverpool", "Sevilla", "Atletico Madrid"],
+    "Home Goals": [2, 2, 1, 2, 3],
+    "Away Goals": [1, 1, 2, 1, 1]
 })
 
-# Calculate league average
 avg_home_goals = historical["Home Goals"].mean()
 avg_away_goals = historical["Away Goals"].mean()
 
-# Team strength factors
 teams = pd.unique(historical[["Home Team", "Away Team"]].values.ravel())
 stats = []
 
@@ -63,24 +62,21 @@ def predict_poisson(home_team, away_team):
     away_win = np.sum(np.triu(matrix, 1))
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
-results = []
+# Process and display predictions
+st.write("### Match Predictions")
 for _, row in matches.iterrows():
     h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
     ev_home = (h * row["Home Odds"]) - 1
     ev_draw = (d * row["Draw Odds"]) - 1
     ev_away = (a * row["Away Odds"]) - 1
-    best = max(ev_home, ev_draw, ev_away)
-    best_bet = ["Home", "Draw", "Away"][np.argmax([ev_home, ev_draw, ev_away])] if best > 0.05 else "No Value"
-    results.append({
-        "Match": f"{row['Home Team']} vs {row['Away Team']}",
-        "Home Win Prob": h,
-        "Draw Prob": d,
-        "Away Win Prob": a,
-        "EV Home": round(ev_home, 3),
-        "EV Draw": round(ev_draw, 3),
-        "EV Away": round(ev_away, 3),
-        "Best Bet": best_bet
-    })
+    best_ev = max(ev_home, ev_draw, ev_away)
+    best_bet = ["Home", "Draw", "Away"][np.argmax([ev_home, ev_draw, ev_away])] if best_ev > 0.05 else "No Value"
 
-df = pd.DataFrame(results)
-st.dataframe(df)
+    with st.container():
+        st.markdown(f"**{row['League']}** â {row['Home Team']} vs {row['Away Team']}")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_home:.2f}")
+        col2.metric("Draw", f"{d:.2f}", f"EV: {ev_draw:.2f}")
+        col3.metric("Away Win", f"{a:.2f}", f"EV: {ev_away:.2f}")
+        st.markdown(f"**Best Bet:** `{best_bet}`")
+        st.markdown("---")
