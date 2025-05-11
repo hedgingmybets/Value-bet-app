@@ -34,10 +34,7 @@ def load_results(code: str):
     url = f"https://api.football-data.org/v4/competitions/{code}/matches?season=2024&status=FINISHED"
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
-    st.write(f'Response status: {r.status_code}')
     data = r.json().get("matches", [])
-    st.write(f'Loaded odds data with {len(data)} entries.')
-        st.write(f'Total matches found for {odds_key}:', len(data))
     results = []
     for match in data:
         if match["score"]["fullTime"]["home"] is not None:
@@ -52,7 +49,6 @@ def load_results(code: str):
 @st.cache_data(ttl=600)
 def load_odds_best(odds_key: str):
     url = f"https://api.the-odds-api.com/v4/sports/{odds_key}/odds"
-    st.write('Fetching odds...')
     params = {
         "apiKey": ODDS_API_KEY,
         "regions": "uk",
@@ -60,15 +56,10 @@ def load_odds_best(odds_key: str):
         "oddsFormat": "decimal"
     }
     r = requests.get(url, params=params)
-    st.write(f'Response status: {r.status_code}')
     if r.status_code != 200:
-    st.write('Non-200 response, skipping odds load.')
-        st.write(f'Failed to load odds for {odds_key} — Status:', r.status_code)
         st.error("Failed to fetch odds.")
         return pd.DataFrame()
     data = r.json()
-    st.write(f'Loaded odds data with {len(data)} entries.')
-        st.write(f'Total matches found for {odds_key}:', len(data))
     matches = []
     for match in data:
         home = match.get("home_team")
