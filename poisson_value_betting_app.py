@@ -10,7 +10,6 @@ st.title("Value Betting with Real Odds (Poisson Model)")
 API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
 
-# Team name normalization
 team_name_map = {
     "Manchester City": "Man City", "Manchester United": "Man United",
     "Tottenham Hotspur": "Tottenham", "Brighton & Hove Albion": "Brighton",
@@ -23,7 +22,6 @@ team_name_map = {
     "Chelsea": "Chelsea", "Liverpool": "Liverpool", "Arsenal": "Arsenal"
 }
 
-# Fetch real odds
 def fetch_odds():
     params = {
         "apiKey": API_KEY,
@@ -39,25 +37,37 @@ def fetch_odds():
     data = response.json()
     matches = []
     for match in data:
-        if not match.get("bookmakers"):
+        if not match.get("bookmakers") or "home_team" not in match or "away_team" not in match:
             continue
+
+        raw_home = match["home_team"]
+        raw_away = match["away_team"]
+        home_team = team_name_map.get(raw_home, raw_home)
+        away_team = team_name_map.get(raw_away, raw_away)
+
         odds = match["bookmakers"][0]["markets"][0]["outcomes"]
-        if len(odds) < 2:
-            continue
-        home_team = team_name_map.get(odds[0]["name"], odds[0]["name"])
-        away_team = team_name_map.get(odds[1]["name"], odds[1]["name"])
-        matches.append({
-            "Home Team": home_team,
-            "Away Team": away_team,
-            "Home Odds": odds[0]["price"],
-            "Draw Odds": 3.2 + np.random.rand(),
-            "Away Odds": odds[1]["price"]
-        })
+        home_odds = away_odds = None
+
+        for outcome in odds:
+            name = team_name_map.get(outcome["name"], outcome["name"])
+            if name == home_team:
+                home_odds = outcome["price"]
+            elif name == away_team:
+                away_odds = outcome["price"]
+
+        if home_odds and away_odds:
+            matches.append({
+                "Home Team": home_team,
+                "Away Team": away_team,
+                "Home Odds": home_odds,
+                "Draw Odds": 3.2 + np.random.rand(),
+                "Away Odds": away_odds
+            })
     return pd.DataFrame(matches)
 
 matches = fetch_odds()
 
-# Full Premier League team training set (mocked)
+# Historical data with 20 Premier League teams
 historical = pd.DataFrame({
     "Home Team": [
         "Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham", "Man United", "Newcastle", "Brighton",
@@ -114,7 +124,7 @@ def predict_poisson(home_team, away_team):
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
 # Display
-st.write("### Real-Time Premier League Value Bets")
+st.write("### Corrected Home vs Away Matchups with Value Bets")
 if matches.empty:
     st.warning("No matches or odds available.")
 else:
