@@ -15,7 +15,6 @@ leagues = {
     "League Two": {"code": "EL2", "odds_key": "soccer_english_league_two"},
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
 }
-}
 
 ODDS_API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 RESULTS_API_KEY = "015bbaf510cb464fb3accc3309783ccb"
