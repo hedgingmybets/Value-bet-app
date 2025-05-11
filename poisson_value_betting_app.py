@@ -1,39 +1,56 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
 from scipy.stats import poisson
 
 st.set_page_config(page_title="Poisson Value Betting", layout="centered")
-st.title("Football Value Betting (Poisson Model)")
+st.title("Live Football Value Bets (Poisson Model)")
 
-# Expanded list of sample upcoming matches
-matches = pd.DataFrame({
-    "League": ["Premier League"] * 3 + ["La Liga"] * 2,
-    "Home Team": ["Man City", "Liverpool", "Arsenal", "Real Madrid", "Barcelona"],
-    "Away Team": ["Arsenal", "Man United", "Chelsea", "Valencia", "Atletico Madrid"],
-    "Home Odds": [1.80, 2.10, 2.00, 1.90, 2.20],
-    "Draw Odds": [3.70, 3.50, 3.60, 3.30, 3.40],
-    "Away Odds": [4.20, 3.40, 3.90, 4.10, 3.10]
-})
+API_KEY = "015bbaf510cb464fb3accc3309783ccb"
+HEADERS = {"X-Auth-Token": API_KEY}
+BASE_URL = "https://api.football-data.org/v4"
 
-# Simple historical dataset
+# Load upcoming matches from Premier League (or change as needed)
+def get_fixtures(competition="PL", days_ahead=7):
+    url = f"{BASE_URL}/competitions/{competition}/matches?status=SCHEDULED"
+    resp = requests.get(url, headers=HEADERS)
+    matches = resp.json().get("matches", [])[:10]
+    data = []
+    for m in matches:
+        home = m['homeTeam']['name']
+        away = m['awayTeam']['name']
+        date = m['utcDate'][:10]
+        data.append({
+            "Date": date,
+            "Home Team": home,
+            "Away Team": away,
+            "Home Odds": 2.0 + np.random.rand(),  # Placeholder odds
+            "Draw Odds": 3.2 + np.random.rand(),
+            "Away Odds": 2.5 + np.random.rand()
+        })
+    return pd.DataFrame(data)
+
+matches = get_fixtures()
+
+# Placeholder historical data
 historical = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool", "Arsenal", "Real Madrid", "Barcelona"],
-    "Away Team": ["Chelsea", "Arsenal", "Liverpool", "Sevilla", "Atletico Madrid"],
-    "Home Goals": [2, 2, 1, 2, 3],
-    "Away Goals": [1, 1, 2, 1, 1]
+    "Home Team": ["Man City", "Liverpool", "Arsenal"],
+    "Away Team": ["Chelsea", "Arsenal", "Liverpool"],
+    "Home Goals": [2, 2, 1],
+    "Away Goals": [1, 1, 2]
 })
 
 avg_home_goals = historical["Home Goals"].mean()
 avg_away_goals = historical["Away Goals"].mean()
 
 teams = pd.unique(historical[["Home Team", "Away Team"]].values.ravel())
-stats = []
+team_stats = []
 
 for team in teams:
     home = historical[historical["Home Team"] == team]
     away = historical[historical["Away Team"] == team]
-    stats.append({
+    team_stats.append({
         "Team": team,
         "Home Attack": home["Home Goals"].mean() / avg_home_goals if not home.empty else 1,
         "Home Defense": home["Away Goals"].mean() / avg_away_goals if not home.empty else 1,
@@ -41,7 +58,7 @@ for team in teams:
         "Away Defense": away["Home Goals"].mean() / avg_home_goals if not away.empty else 1,
     })
 
-team_stats = pd.DataFrame(stats)
+team_stats = pd.DataFrame(team_stats)
 
 def predict_poisson(home_team, away_team):
     ht = team_stats[team_stats["Team"] == home_team]
@@ -62,8 +79,8 @@ def predict_poisson(home_team, away_team):
     away_win = np.sum(np.triu(matrix, 1))
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
-# Process and display predictions
-st.write("### Match Predictions")
+# Display results
+st.write("### Upcoming Matches & Value Bets")
 for _, row in matches.iterrows():
     h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
     ev_home = (h * row["Home Odds"]) - 1
@@ -73,7 +90,7 @@ for _, row in matches.iterrows():
     best_bet = ["Home", "Draw", "Away"][np.argmax([ev_home, ev_draw, ev_away])] if best_ev > 0.05 else "No Value"
 
     with st.container():
-        st.markdown(f"**{row['League']}** â {row['Home Team']} vs {row['Away Team']}")
+        st.markdown(f"**{row['Date']}** â {row['Home Team']} vs {row['Away Team']}")
         col1, col2, col3 = st.columns(3)
         col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_home:.2f}")
         col2.metric("Draw", f"{d:.2f}", f"EV: {ev_draw:.2f}")
