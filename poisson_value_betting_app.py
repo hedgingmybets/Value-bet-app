@@ -132,7 +132,7 @@ def predict_poisson(ht, at):
 if odds_df.empty:
     st.warning("No upcoming odds available.")
 else:
-    st.write(f"### Upcoming Matches — {selected}")
+        st.write(f"### Upcoming Matches — {selected}")
     for _, row in odds_df.iterrows():
         h, d, a, conf = predict_poisson(row["Home Team"], row["Away Team"])
         if conf_filter != "All" and conf != conf_filter:
