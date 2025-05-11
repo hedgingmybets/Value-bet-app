@@ -153,4 +153,4 @@ else:
         col3.metric("Away Win", f"{a:.2f}", f"Impl: {implied_away:.2f}")
         st.markdown(f"**EV** — Home: `{ev_h}`, Draw: `{ev_d}`, Away: `{ev_a}`")
         st.markdown(f"**Best Bet:** `{best_bet}` | **Confidence:** {conf}")
-        st.markdown("---")
+        st.markdown("---") 
