@@ -4,10 +4,10 @@ import numpy as np
 import requests
 from scipy.stats import poisson
 
-st.set_page_config(page_title="Multi-League Value Betting", layout="centered")
-st.title("Auto-Updating Value Betting Model — Europe + England")
+st.set_page_config(page_title="All-League Value Bets", layout="centered")
+st.title("Value Betting — EFL + European Leagues (OddsAPI)")
 
-# League map
+# League definitions
 leagues = {
     "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
     "Championship": {"code": "ELC", "odds_key": "soccer_efl_championship"},
@@ -19,36 +19,30 @@ leagues = {
     "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
 }
 
+# API Keys
 ODDS_API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 RESULTS_API_KEY = "015bbaf510cb464fb3accc3309783ccb"
 
-team_name_map = {}  # Will build automatically as names are encountered
-
-# User selects league
 selected = st.selectbox("Choose a League", list(leagues.keys()))
 league_code = leagues[selected]["code"]
 odds_key = leagues[selected]["odds_key"]
 
 @st.cache_data(ttl=86400)
-def load_results(code):
+def load_results(code: str):
     url = f"https://api.football-data.org/v4/competitions/{code}/matches?season=2024&status=FINISHED"
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
     data = r.json().get("matches", [])
-    results = []
+    rows = []
     for match in data:
-        h_name = match["homeTeam"]["name"]
-        a_name = match["awayTeam"]["name"]
-        team_name_map[h_name] = h_name
-        team_name_map[a_name] = a_name
         if match["score"]["fullTime"]["home"] is not None:
-            results.append({
-                "Home Team": h_name,
-                "Away Team": a_name,
+            rows.append({
+                "Home Team": match["homeTeam"]["name"],
+                "Away Team": match["awayTeam"]["name"],
                 "Home Goals": match["score"]["fullTime"]["home"],
                 "Away Goals": match["score"]["fullTime"]["away"]
             })
-    return pd.DataFrame(results)
+    return pd.DataFrame(rows)
 
 @st.cache_data(ttl=600)
 def load_odds(odds_key: str):
@@ -60,47 +54,45 @@ def load_odds(odds_key: str):
         "oddsFormat": "decimal"
     }
     r = requests.get(url, params=params)
+    if r.status_code != 200:
+        return pd.DataFrame()
     data = r.json()
     matches = []
     for match in data:
         if not match.get("bookmakers") or "home_team" not in match or "away_team" not in match:
             continue
-        home_team = match["home_team"]
-        away_team = match["away_team"]
-        team_name_map[home_team] = home_team
-        team_name_map[away_team] = away_team
-        outcomes = match["bookmakers"][0]["markets"][0]["outcomes"]
+        home = match["home_team"]
+        away = match["away_team"]
+        odds = match["bookmakers"][0]["markets"][0]["outcomes"]
         home_odds = away_odds = None
-        for o in outcomes:
-            name = o["name"]
-            if name == home_team:
+        for o in odds:
+            if o["name"] == home:
                 home_odds = o["price"]
-            elif name == away_team:
+            elif o["name"] == away:
                 away_odds = o["price"]
         if home_odds and away_odds:
             matches.append({
-                "Home Team": home_team,
-                "Away Team": away_team,
+                "Home Team": home,
+                "Away Team": away,
                 "Home Odds": home_odds,
                 "Draw Odds": 3.2 + np.random.rand(),
                 "Away Odds": away_odds
             })
     return pd.DataFrame(matches)
 
-# Load data
 results = load_results(league_code)
 odds = load_odds(odds_key)
 
-# Build team stats
 avg_home = results["Home Goals"].mean()
 avg_away = results["Away Goals"].mean()
 
 teams = pd.unique(results[["Home Team", "Away Team"]].values.ravel())
-stats = []
+team_stats = []
+
 for team in teams:
     home = results[results["Home Team"] == team]
     away = results[results["Away Team"] == team]
-    stats.append({
+    team_stats.append({
         "Team": team,
         "Home Attack": home["Home Goals"].mean() / avg_home if not home.empty else 1,
         "Home Defense": home["Away Goals"].mean() / avg_away if not home.empty else 1,
@@ -108,7 +100,7 @@ for team in teams:
         "Away Defense": away["Home Goals"].mean() / avg_home if not away.empty else 1,
     })
 
-team_stats = pd.DataFrame(stats)
+team_stats = pd.DataFrame(team_stats)
 fallback = {"home": 0.45, "draw": 0.28, "away": 0.27}
 
 def predict_poisson(ht, at):
@@ -124,10 +116,10 @@ def predict_poisson(ht, at):
             matrix[i][j] = poisson.pmf(i, mu_h) * poisson.pmf(j, mu_a)
     return round(np.sum(np.tril(matrix, -1)), 3), round(np.sum(np.diag(matrix)), 3), round(np.sum(np.triu(matrix, 1)), 3)
 
-# Show output
-st.write(f"### Upcoming {selected} Matches")
+# Display interface
+st.write(f"### Upcoming Matches — {selected}")
 if odds.empty:
-    st.warning("No matches or odds available.")
+    st.warning("No odds available for this league.")
 else:
     for _, row in odds.iterrows():
         h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
