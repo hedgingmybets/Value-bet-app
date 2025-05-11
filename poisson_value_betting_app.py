@@ -35,6 +35,7 @@ def load_results(code: str):
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
     data = r.json().get("matches", [])
+    st.write(f'Total matches found for {odds_key}:', len(data))
     results = []
     for match in data:
         if match["score"]["fullTime"]["home"] is not None:
@@ -57,9 +58,11 @@ def load_odds_best(odds_key: str):
     }
     r = requests.get(url, params=params)
     if r.status_code != 200:
+    st.write(f'Failed to load odds for {odds_key} — Status:', r.status_code)
         st.error("Failed to fetch odds.")
         return pd.DataFrame()
     data = r.json()
+    st.write(f'Total matches found for {odds_key}:', len(data))
     matches = []
     for match in data:
         home = match.get("home_team")
