@@ -4,36 +4,50 @@ import numpy as np
 import requests
 from scipy.stats import poisson
 
-st.set_page_config(page_title="Poisson Value Betting", layout="centered")
-st.title("Live Football Value Bets (Poisson Model)")
+st.set_page_config(page_title="Value Bets with Real Odds", layout="centered")
+st.title("Football Value Betting (Live Odds + Poisson Model)")
 
-API_KEY = "015bbaf510cb464fb3accc3309783ccb"
-HEADERS = {"X-Auth-Token": API_KEY}
-BASE_URL = "https://api.football-data.org/v4"
+# Odds API Key
+API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
+ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
 
-# Load upcoming matches from Premier League (or change as needed)
-def get_fixtures(competition="PL", days_ahead=7):
-    url = f"{BASE_URL}/competitions/{competition}/matches?status=SCHEDULED"
-    resp = requests.get(url, headers=HEADERS)
-    matches = resp.json().get("matches", [])[:10]
-    data = []
-    for m in matches:
-        home = m['homeTeam']['name']
-        away = m['awayTeam']['name']
-        date = m['utcDate'][:10]
-        data.append({
-            "Date": date,
-            "Home Team": home,
-            "Away Team": away,
-            "Home Odds": 2.0 + np.random.rand(),  # Placeholder odds
-            "Draw Odds": 3.2 + np.random.rand(),
-            "Away Odds": 2.5 + np.random.rand()
+# Get live odds from The Odds API
+def fetch_odds():
+    params = {
+        "apiKey": API_KEY,
+        "regions": "uk",
+        "markets": "h2h",
+        "oddsFormat": "decimal"
+    }
+    response = requests.get(ODDS_URL, params=params)
+    if response.status_code != 200:
+        st.error("Failed to fetch odds data.")
+        return pd.DataFrame()
+
+    data = response.json()
+    matches = []
+    for match in data:
+        if "bookmakers" not in match or not match["bookmakers"]:
+            continue
+        bookmaker = match["bookmakers"][0]
+        odds = bookmaker["markets"][0]["outcomes"]
+        home_team = odds[0]["name"]
+        away_team = odds[1]["name"]
+        home_odds = odds[0]["price"]
+        away_odds = odds[1]["price"]
+        draw_odds = 3.2 + np.random.rand()  # placeholder for draw
+        matches.append({
+            "Home Team": home_team,
+            "Away Team": away_team,
+            "Home Odds": home_odds,
+            "Draw Odds": draw_odds,
+            "Away Odds": away_odds
         })
-    return pd.DataFrame(data)
+    return pd.DataFrame(matches)
 
-matches = get_fixtures()
+matches = fetch_odds()
 
-# Placeholder historical data
+# Minimal historical data
 historical = pd.DataFrame({
     "Home Team": ["Man City", "Liverpool", "Arsenal"],
     "Away Team": ["Chelsea", "Arsenal", "Liverpool"],
@@ -79,21 +93,24 @@ def predict_poisson(home_team, away_team):
     away_win = np.sum(np.triu(matrix, 1))
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
-# Display results
-st.write("### Upcoming Matches & Value Bets")
-for _, row in matches.iterrows():
-    h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
-    ev_home = (h * row["Home Odds"]) - 1
-    ev_draw = (d * row["Draw Odds"]) - 1
-    ev_away = (a * row["Away Odds"]) - 1
-    best_ev = max(ev_home, ev_draw, ev_away)
-    best_bet = ["Home", "Draw", "Away"][np.argmax([ev_home, ev_draw, ev_away])] if best_ev > 0.05 else "No Value"
+# Display odds and value bets
+st.write("### Upcoming Premier League Matches")
+if matches.empty:
+    st.warning("No matches available or API limit reached.")
+else:
+    for _, row in matches.iterrows():
+        h, d, a = predict_poisson(row["Home Team"], row["Away Team"])
+        ev_home = (h * row["Home Odds"]) - 1
+        ev_draw = (d * row["Draw Odds"]) - 1
+        ev_away = (a * row["Away Odds"]) - 1
+        best_ev = max(ev_home, ev_draw, ev_away)
+        best_bet = ["Home", "Draw", "Away"][np.argmax([ev_home, ev_draw, ev_away])] if best_ev > 0.05 else "No Value"
 
-    with st.container():
-        st.markdown(f"**{row['Date']}** â {row['Home Team']} vs {row['Away Team']}")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_home:.2f}")
-        col2.metric("Draw", f"{d:.2f}", f"EV: {ev_draw:.2f}")
-        col3.metric("Away Win", f"{a:.2f}", f"EV: {ev_away:.2f}")
-        st.markdown(f"**Best Bet:** `{best_bet}`")
-        st.markdown("---")
+        with st.container():
+            st.markdown(f"**{row['Home Team']} vs {row['Away Team']}**")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_home:.2f}")
+            col2.metric("Draw", f"{d:.2f}", f"EV: {ev_draw:.2f}")
+            col3.metric("Away Win", f"{a:.2f}", f"EV: {ev_away:.2f}")
+            st.markdown(f"**Best Bet:** `{best_bet}`")
+            st.markdown("---")
