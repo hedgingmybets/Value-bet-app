@@ -30,7 +30,7 @@ league_code = leagues[selected]["code"]
 odds_key = leagues[selected]["odds_key"]
 
 @st.cache_data(ttl=86400)
-def load_results(code):
+def load_results(code: str):
     url = f"https://api.football-data.org/v4/competitions/{code}/matches?season=2024&status=FINISHED"
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
