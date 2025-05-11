@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 import requests
 from scipy.stats import poisson
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 st.set_page_config(page_title="Premier League Value Bets", layout="centered")
 st.title("Value Betting with Real Odds (Poisson Model)")
@@ -10,31 +14,18 @@ st.title("Value Betting with Real Odds (Poisson Model)")
 API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
 
-# Normalize team names if needed
 team_name_map = {
-    "Manchester City": "Man City",
-    "Manchester United": "Man United",
-    "Tottenham Hotspur": "Tottenham",
-    "Brighton & Hove Albion": "Brighton",
-    "Newcastle United": "Newcastle",
-    "Wolverhampton Wanderers": "Wolves",
-    "West Ham United": "West Ham",
-    "Nottingham Forest": "Nottm Forest",
-    "Sheffield United": "Sheffield Utd",
-    "Luton Town": "Luton",
-    "AFC Bournemouth": "Bournemouth",
-    "Brentford": "Brentford",
-    "Fulham": "Fulham",
-    "Crystal Palace": "Crystal Palace",
-    "Everton": "Everton",
-    "Burnley": "Burnley",
-    "Aston Villa": "Aston Villa",
-    "Chelsea": "Chelsea",
-    "Liverpool": "Liverpool",
-    "Arsenal": "Arsenal"
+    "Manchester City": "Man City", "Manchester United": "Man United",
+    "Tottenham Hotspur": "Tottenham", "Brighton & Hove Albion": "Brighton",
+    "Newcastle United": "Newcastle", "Wolverhampton Wanderers": "Wolves",
+    "West Ham United": "West Ham", "Nottingham Forest": "Nottm Forest",
+    "Sheffield United": "Sheffield Utd", "Luton Town": "Luton",
+    "AFC Bournemouth": "Bournemouth", "Brentford": "Brentford",
+    "Fulham": "Fulham", "Crystal Palace": "Crystal Palace",
+    "Everton": "Everton", "Burnley": "Burnley", "Aston Villa": "Aston Villa",
+    "Chelsea": "Chelsea", "Liverpool": "Liverpool", "Arsenal": "Arsenal"
 }
 
-# Fetch real odds
 def fetch_odds():
     params = {
         "apiKey": API_KEY,
@@ -43,8 +34,10 @@ def fetch_odds():
         "oddsFormat": "decimal"
     }
     response = requests.get(ODDS_URL, params=params)
+    logging.info(f"API response status: {response.status_code}")
+    logging.info(f"API response content: {response.text[:500]}")
     if response.status_code != 200:
-        st.error("Failed to fetch odds data.")
+        st.error(f"Failed to fetch odds data. Status code: {response.status_code}")
         return pd.DataFrame()
 
     data = response.json()
@@ -61,23 +54,20 @@ def fetch_odds():
             "Home Team": home_team,
             "Away Team": away_team,
             "Home Odds": odds[0]["price"],
-            "Draw Odds": 3.2 + np.random.rand(),  # placeholder
+            "Draw Odds": 3.2 + np.random.rand(),
             "Away Odds": odds[1]["price"]
         })
     return pd.DataFrame(matches)
 
 matches = fetch_odds()
+st.write("Fetched matches preview:", matches.head())
 
-# Full training data (mocked for demo)
+# Minimal historical data for Poisson model
 historical = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham", "Man United", "Newcastle", "Brighton",
-                  "Brentford", "Fulham", "Crystal Palace", "Wolves", "Aston Villa", "West Ham", "Everton", "Leicester",
-                  "Leeds", "Nottm Forest", "Bournemouth", "Southampton"],
-    "Away Team": ["Arsenal", "Chelsea", "Liverpool", "Man City", "Brighton", "Tottenham", "Wolves", "Fulham",
-                  "West Ham", "Brentford", "Leeds", "Everton", "Crystal Palace", "Newcastle", "Southampton", "Bournemouth",
-                  "Aston Villa", "Leicester", "Luton", "Sheffield Utd"],
-    "Home Goals": [2, 2, 1, 1, 2, 1, 2, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1, 2, 1, 1],
-    "Away Goals": [1, 1, 2, 2, 1, 1, 0, 2, 1, 2, 2, 1, 1, 0, 1, 1, 2, 0, 2, 1]
+    "Home Team": ["Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham"],
+    "Away Team": ["Arsenal", "Chelsea", "Liverpool", "Man City", "Brighton"],
+    "Home Goals": [2, 2, 1, 1, 2],
+    "Away Goals": [1, 1, 2, 2, 1]
 })
 
 avg_home_goals = historical["Home Goals"].mean()
@@ -85,6 +75,7 @@ avg_away_goals = historical["Away Goals"].mean()
 
 teams = pd.unique(historical[["Home Team", "Away Team"]].values.ravel())
 team_stats = []
+
 for team in teams:
     home = historical[historical["Home Team"] == team]
     away = historical[historical["Away Team"] == team]
@@ -98,7 +89,6 @@ for team in teams:
 
 team_stats = pd.DataFrame(team_stats)
 
-# Fallback average probabilities
 fallback_probs = {"home": 0.45, "draw": 0.28, "away": 0.27}
 
 def predict_poisson(home_team, away_team):
@@ -121,7 +111,7 @@ def predict_poisson(home_team, away_team):
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
 # Display results
-st.write("### Real-Time Premier League Value Bets")
+st.write("### Real-Time Value Bets")
 if matches.empty:
     st.warning("No matches or odds available.")
 else:
