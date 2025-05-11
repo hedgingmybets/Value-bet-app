@@ -8,7 +8,14 @@ st.set_page_config(page_title="Value Betting Dashboard", layout="centered")
 st.title("Value Betting Dashboard — Full Version with Predictions and EV")
 
 leagues = {
-    "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
+    "Premier League": {'code': 'PL', 'odds_key': 'soccer_epl'},
+    "Championship": {'code': 'ELC', 'odds_key': 'soccer_english_championship'},
+    "League One": {'code': 'EL1', 'odds_key': 'soccer_english_league_one'},
+    "League Two": {'code': 'EL2', 'odds_key': 'soccer_english_league_two'},
+    "La Liga": {'code': 'PD', 'odds_key': 'soccer_spain_la_liga'},
+    "Serie A": {'code': 'SA', 'odds_key': 'soccer_italy_serie_a'},
+    "Bundesliga": {'code': 'BL1', 'odds_key': 'soccer_germany_bundesliga'},
+    "Ligue 1": {'code': 'FL1', 'odds_key': 'soccer_france_ligue_one'}
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
     "Serie A": {"code": "SA", "odds_key": "soccer_italy_serie_a"},
     "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
