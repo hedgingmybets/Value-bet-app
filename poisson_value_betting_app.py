@@ -3,11 +3,12 @@ import pandas as pd
 import numpy as np
 import requests
 from scipy.stats import poisson
+from datetime import datetime
 
-st.set_page_config(page_title="Enhanced Value Betting App", layout="centered")
-st.title("Value Betting — xG Enhanced with Confidence Scoring")
+st.set_page_config(page_title="Value Betting Dashboard", layout="centered")
+st.title("Advanced Value Betting Dashboard")
 
-# League selection
+# --- League Settings ---
 leagues = {
     "Premier League": {"code": "PL", "odds_key": "soccer_epl"},
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
@@ -19,9 +20,23 @@ leagues = {
 ODDS_API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 RESULTS_API_KEY = "015bbaf510cb464fb3accc3309783ccb"
 
-selected = st.selectbox("Choose a League", list(leagues.keys()))
+selected = st.sidebar.selectbox("Choose League", list(leagues.keys()))
 league_code = leagues[selected]["code"]
 odds_key = leagues[selected]["odds_key"]
+
+min_ev = st.sidebar.slider("Minimum EV Threshold", -1.0, 1.0, 0.05, 0.01)
+conf_filter = st.sidebar.selectbox("Confidence Level", ["All", "High", "Medium", "Low"])
+sort_by = st.sidebar.selectbox("Sort Matches By", ["Expected Value", "Kickoff Time"])
+
+# --- Help Section ---
+if st.sidebar.checkbox("Show Help"):
+    st.sidebar.markdown("""
+    **How to Read:**
+    - **EV**: Expected Value based on model vs odds.
+    - **Confidence**: Based on amount of historical xG data per team.
+    - **Implied Odds**: Bookmaker's estimate (1 / odds).
+    - **Best Bet**: Outcome with highest positive EV.
+    """)
 
 @st.cache_data(ttl=86400)
 def load_results(code: str):
@@ -35,8 +50,8 @@ def load_results(code: str):
             results.append({
                 "Home Team": match["homeTeam"]["name"],
                 "Away Team": match["awayTeam"]["name"],
-                "xG Home": np.random.uniform(0.9, 2.2),  # Simulated xG
-                "xG Away": np.random.uniform(0.7, 2.0)   # Simulated xG
+                "xG Home": np.random.uniform(1.0, 2.4),
+                "xG Away": np.random.uniform(0.8, 2.1)
             })
     return pd.DataFrame(results)
 
@@ -72,14 +87,14 @@ def load_odds(odds_key: str):
                 "Away Team": away,
                 "Home Odds": home_odds,
                 "Draw Odds": 3.2 + np.random.rand(),
-                "Away Odds": away_odds
+                "Away Odds": away_odds,
+                "Kickoff": match.get("commence_time", "N/A")
             })
     return pd.DataFrame(matches)
 
 results = load_results(league_code)
 odds = load_odds(odds_key)
 
-# Use xG instead of actual goals
 avg_home_xg = results["xG Home"].mean()
 avg_away_xg = results["xG Away"].mean()
 
@@ -104,39 +119,54 @@ def predict_poisson(ht, at):
     h = team_stats[team_stats["Team"] == ht]
     a = team_stats[team_stats["Team"] == at]
     if h.empty or a.empty:
-        conf = "Low"
-        return fallback["home"], fallback["draw"], fallback["away"], conf
+        return fallback["home"], fallback["draw"], fallback["away"], "Low"
     mu_h = h["Home Attack"].values[0] * a["Away Defense"].values[0] * avg_home_xg
     mu_a = a["Away Attack"].values[0] * h["Home Defense"].values[0] * avg_away_xg
     matrix = np.zeros((6, 6))
     for i in range(6):
         for j in range(6):
             matrix[i][j] = poisson.pmf(i, mu_h) * poisson.pmf(j, mu_a)
-    data_points = int(h["Data Points"].values[0] + a["Data Points"].values[0])
-    if data_points >= 30:
-        conf = "High"
-    elif data_points >= 15:
-        conf = "Medium"
-    else:
-        conf = "Low"
+    dp = int(h["Data Points"].values[0] + a["Data Points"].values[0])
+    conf = "High" if dp >= 30 else "Medium" if dp >= 15 else "Low"
     return round(np.sum(np.tril(matrix, -1)), 3), round(np.sum(np.diag(matrix)), 3), round(np.sum(np.triu(matrix, 1)), 3), conf
 
-st.write(f"### Upcoming Matches — {selected}")
+st.write(f"### Upcoming Matches â {selected}")
 if odds.empty:
-    st.warning("No odds available for this league.")
+    st.warning("No odds available.")
 else:
+    match_rows = []
     for _, row in odds.iterrows():
         h, d, a, conf = predict_poisson(row["Home Team"], row["Away Team"])
-        ev_h = (h * row["Home Odds"]) - 1
-        ev_d = (d * row["Draw Odds"]) - 1
-        ev_a = (a * row["Away Odds"]) - 1
-        best_ev = max(ev_h, ev_d, ev_a)
-        best_bet = ["Home", "Draw", "Away"][np.argmax([ev_h, ev_d, ev_a])] if best_ev > 0.05 else "No Value"
-        st.markdown(f"**{row['Home Team']} vs {row['Away Team']}**")
+        implied_home = round(1 / row["Home Odds"], 3)
+        implied_draw = round(1 / row["Draw Odds"], 3)
+        implied_away = round(1 / row["Away Odds"], 3)
+        ev_h = round((h * row["Home Odds"]) - 1, 3)
+        ev_d = round((d * row["Draw Odds"]) - 1, 3)
+        ev_a = round((a * row["Away Odds"]) - 1, 3)
+        best = max(ev_h, ev_d, ev_a)
+        best_bet = ["Home", "Draw", "Away"][np.argmax([ev_h, ev_d, ev_a])] if best > min_ev else "No Value"
+        if conf_filter != "All" and conf != conf_filter:
+            continue
+        match_rows.append({
+            "Kickoff": row["Kickoff"],
+            "Match": f"{row['Home Team']} vs {row['Away Team']}",
+            "Home Prob": h, "Draw Prob": d, "Away Prob": a,
+            "Home Impl": implied_home, "Draw Impl": implied_draw, "Away Impl": implied_away,
+            "EV Home": ev_h, "EV Draw": ev_d, "EV Away": ev_a,
+            "Confidence": conf, "Best Bet": best_bet
+        })
+
+    if sort_by == "Expected Value":
+        match_rows.sort(key=lambda x: max(x["EV Home"], x["EV Draw"], x["EV Away"]), reverse=True)
+    elif sort_by == "Kickoff Time":
+        match_rows.sort(key=lambda x: x["Kickoff"] if x["Kickoff"] != "N/A" else "")
+
+    for m in match_rows:
+        st.subheader(m["Match"])
         col1, col2, col3 = st.columns(3)
-        col1.metric("Home Win", f"{h:.2f}", f"EV: {ev_h:.2f}")
-        col2.metric("Draw", f"{d:.2f}", f"EV: {ev_d:.2f}")
-        col3.metric("Away Win", f"{a:.2f}", f"EV: {ev_a:.2f}")
-        st.caption(f"**Confidence:** {conf}")
-        st.markdown(f"**Best Bet:** `{best_bet}`")
+        col1.metric("Home Win", f"{m['Home Prob']:.2f}", f"Impl: {m['Home Impl']:.2f}")
+        col2.metric("Draw", f"{m['Draw Prob']:.2f}", f"Impl: {m['Draw Impl']:.2f}")
+        col3.metric("Away Win", f"{m['Away Prob']:.2f}", f"Impl: {m['Away Impl']:.2f}")
+        st.write(f"**EV** â Home: `{m['EV Home']}`, Draw: `{m['EV Draw']}`, Away: `{m['EV Away']}`")
+        st.write(f"**Best Bet:** `{m['Best Bet']}` | **Confidence:** {m['Confidence']}")
         st.markdown("---")
