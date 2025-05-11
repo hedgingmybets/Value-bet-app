@@ -30,7 +30,7 @@ league_code = leagues[selected]["code"]
 odds_key = leagues[selected]["odds_key"]
 
 @st.cache_data(ttl=86400)
-def load_results(code: str):
+def load_results(code):
     url = f"https://api.football-data.org/v4/competitions/{code}/matches?season=2024&status=FINISHED"
     headers = {"X-Auth-Token": RESULTS_API_KEY}
     r = requests.get(url, headers=headers)
@@ -51,7 +51,7 @@ def load_results(code: str):
     return pd.DataFrame(results)
 
 @st.cache_data(ttl=600)
-def load_odds():
+def load_odds(odds_key: str):
     url = f"https://api.the-odds-api.com/v4/sports/{odds_key}/odds"
     params = {
         "apiKey": ODDS_API_KEY,
@@ -89,7 +89,7 @@ def load_odds():
 
 # Load data
 results = load_results(league_code)
-odds = load_odds()
+odds = load_odds(odds_key)
 
 # Build team stats
 avg_home = results["Home Goals"].mean()
