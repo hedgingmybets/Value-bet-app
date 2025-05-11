@@ -36,6 +36,7 @@ def load_results(code: str):
     r = requests.get(url, headers=headers)
     st.write('Request sent. Awaiting response...')
     data = r.json().get("matches", [])
+    st.write(f'Total matches fetched: {len(data)}')
         st.write(f'Total matches found for {odds_key}:', len(data))
     results = []
     for match in data:
@@ -61,7 +62,7 @@ def load_odds_best(odds_key: str):
     r = requests.get(url, params=params)
     st.write('Request sent. Awaiting response...')
     if r.status_code != 200:
-        st.write(f'Failed to load odds — status {r.status_code}')
+    st.write(f'Failed to load odds — status: {r.status_code}')
         st.write(f'Failed to load odds for {odds_key} — Status:', r.status_code)
         st.error("Failed to fetch odds.")
         return pd.DataFrame()
