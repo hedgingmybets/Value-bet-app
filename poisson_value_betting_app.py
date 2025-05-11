@@ -11,6 +11,19 @@ st.title("Football Value Betting (Live Odds + Poisson Model)")
 API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds"
 
+# Team name normalization
+team_name_map = {
+    "Manchester City": "Man City",
+    "Manchester United": "Man United",
+    "Arsenal": "Arsenal",
+    "Liverpool": "Liverpool",
+    "Chelsea": "Chelsea",
+    "Tottenham Hotspur": "Tottenham",
+    "Brighton & Hove Albion": "Brighton",
+    "Newcastle United": "Newcastle",
+    # add more as needed
+}
+
 # Get live odds from The Odds API
 def fetch_odds():
     params = {
@@ -31,11 +44,15 @@ def fetch_odds():
             continue
         bookmaker = match["bookmakers"][0]
         odds = bookmaker["markets"][0]["outcomes"]
+        if len(odds) < 2:
+            continue
         home_team = odds[0]["name"]
         away_team = odds[1]["name"]
+        home_team = team_name_map.get(home_team, home_team)
+        away_team = team_name_map.get(away_team, away_team)
         home_odds = odds[0]["price"]
         away_odds = odds[1]["price"]
-        draw_odds = 3.2 + np.random.rand()  # placeholder for draw
+        draw_odds = 3.2 + np.random.rand()  # placeholder
         matches.append({
             "Home Team": home_team,
             "Away Team": away_team,
@@ -47,12 +64,12 @@ def fetch_odds():
 
 matches = fetch_odds()
 
-# Minimal historical data
+# Historical data
 historical = pd.DataFrame({
-    "Home Team": ["Man City", "Liverpool", "Arsenal"],
-    "Away Team": ["Chelsea", "Arsenal", "Liverpool"],
-    "Home Goals": [2, 2, 1],
-    "Away Goals": [1, 1, 2]
+    "Home Team": ["Man City", "Liverpool", "Arsenal", "Chelsea", "Tottenham"],
+    "Away Team": ["Chelsea", "Arsenal", "Liverpool", "Man City", "Brighton"],
+    "Home Goals": [2, 2, 1, 1, 2],
+    "Away Goals": [1, 1, 2, 2, 1]
 })
 
 avg_home_goals = historical["Home Goals"].mean()
@@ -93,8 +110,8 @@ def predict_poisson(home_team, away_team):
     away_win = np.sum(np.triu(matrix, 1))
     return round(home_win, 3), round(draw, 3), round(away_win, 3)
 
-# Display odds and value bets
-st.write("### Upcoming Premier League Matches")
+# Display results
+st.write("### Real Odds + Poisson Model (Premier League)")
 if matches.empty:
     st.warning("No matches available or API limit reached.")
 else:
