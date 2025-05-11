@@ -14,12 +14,7 @@ leagues = {
     "League One": {"code": "EL1", "odds_key": "soccer_english_league_one"},
     "League Two": {"code": "EL2", "odds_key": "soccer_english_league_two"},
     "La Liga": {"code": "PD", "odds_key": "soccer_spain_la_liga"},
-    "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
-    "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
 }
-    "Serie A": {"code": "SA", "odds_key": "soccer_italy_serie_a"},
-    "Bundesliga": {"code": "BL1", "odds_key": "soccer_germany_bundesliga"},
-    "Ligue 1": {"code": "FL1", "odds_key": "soccer_france_ligue_one"}
 }
 
 ODDS_API_KEY = "8ce16d805de3ae1a3bb23670a86ea37f"
